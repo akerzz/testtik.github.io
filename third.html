@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Mini TikTok</title>
+<style>
+  :root{--bg:#0b0b0c;--muted:#aaa;--accent:#ff2d55;}
+  html,body{height:100%;margin:0;background:var(--bg);font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial;}
+  .app{height:100%;display:flex;align-items:center;justify-content:center;}
+  .feed{width:100%;max-width:420px;height:100vh;overflow:hidden;position:relative;background:linear-gradient(180deg,#050505,#0b0b0c);}
+  .card{height:100vh;position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:flex-start;transition:transform .35s cubic-bezier(.2,.9,.3,1);will-change:transform;}
+  .video-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  video{min-height:100%;min-width:100%;object-fit:cover;background:#000;}
+  .ui{position:relative;z-index:20;padding:18px;color:#fff;box-sizing:border-box;width:100%;display:flex;justify-content:space-between;flex-direction:column;height:100%;}
+  .right-col{width:84px;display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:flex-end;margin-bottom:116px;}
+  .btn{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px;color:var(--muted);text-decoration:none;}
+  .btn .icon{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;}
+  .profile{display:flex;align-items:center;gap:12px;cursor:pointer;}
+  .profile .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(45deg,#ff2d55,#ff7600);}
+  .caption{max-width:60%;font-size:14px;color:#fff;}
+  .bottom-bar{display:flex;gap:14px;align-items:center;}
+  .progress{position:absolute;top:0;left:0;height:3px;background:rgba(255,255,255,.12);width:100%;}
+  .progress > i{display:block;height:100%;width:0;background:var(--accent);transition:width linear;}
+  .pill{background:rgba(0,0,0,.4);backdrop-filter:blur(6px);padding:8px;border-radius:999px;color:#fff;font-size:13px;}
+  .indicator{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:6px;}
+  .indicator span{width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.12);}
+  .indicator span.active{background:var(--accent);}
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="feed" id="feed">
+    <div class="progress" id="progress"><i></i></div>
+
+    <!-- Примеры видео -->
+    <section class="card" data-index="0">
+      <div class="video-wrap"><video class="media" src="videos/video1.mp4" poster="posters/p1.jpg" playsinline muted preload="metadata" loop></video></div>
+      <div class="ui">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="profile">
+            <div class="avatar"></div>
+            <div style="display:flex;flex-direction:column">
+              <strong>@current_user</strong>
+              <span style="color:var(--muted);font-size:13px">Красивый заход солнца</span>
+            </div>
+          </div>
+          <div class="right-col">
+            <a class="btn" href="#" data-action="like"><div class="icon">♥</div><span>1.2k</span></a>
+            <a class="btn" href="#" data-action="comment"><div class="icon">💬</div><span>89</span></a>
+            <a class="btn" href="#" data-action="share"><div class="icon">↗</div><span>Share</span></a>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="bottom-bar"><div class="pill" id="muteToggle">🔈 Выкл звук</div></div>
+          <div class="indicator"><span class="active"></span><span></span><span></span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Плюсик для записи -->
+<div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:100;">
+  <button id="openRecorder" style="font-size:32px;padding:10px 16px;border-radius:50%;background:#ff2d55;color:#fff;border:none;cursor:pointer;">＋</button>
+</div>
+
+<!-- Overlay для записи -->
+<div id="recorderOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:101;flex-direction:column;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+  <video id="preview" autoplay muted style="width:300px;height:400px;border-radius:12px;background:#000;"></video>
+  <div style="margin-top:20px;">
+    <button id="startRecord" style="padding:10px 16px;font-size:16px;">Начать запись</button>
+    <button id="stopRecord" style="padding:10px 16px;font-size:16px;" disabled>Остановить запись</button>
+    <button id="closeRecorder" style="padding:10px 16px;font-size:16px;">Закрыть</button>
+  </div>
+</div>
+
+<!-- Профиль пользователя -->
+<section id="userProfile" style="position:fixed;inset:0;background:#0b0b0c;color:#fff;display:none;flex-direction:column;overflow-y:auto;padding:20px;box-sizing:border-box;z-index:102;">
+  <button id="closeProfile" style="background:none;border:none;color:#fff;font-size:18px;margin-bottom:20px">← Назад</button>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(45deg,#ff2d55,#ff7600);"></div>
+    <div>
+      <h2 id="profileUsername">@current_user</h2>
+      <span id="profileStats">0 подписчиков · 0 подписки</span>
+    </div>
+  </div>
+  <p id="profileDesc" style="margin-top:20px;font-size:15px;color:#ddd">Описание профиля: Люблю снимать видео.</p>
+  <h3 style="margin-top:30px">Видео пользователя</h3>
+  <div id="profileVideos" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;"></div>
+</section>
+
+<!-- Кнопка профиля -->
+<div style="position:fixed;bottom:80px;right:20px;z-index:100;">
+  <button id="userProfileBtn" style="width:60px;height:60px;border-radius:50%;border:none;background:linear-gradient(45deg,#ff2d55,#ff7600);cursor:pointer;">👤</button>
+</div>
+
+<script>
+/* ---- Лента с видео и свайпы ---- */
+(function(){
+  const feed=document.getElementById('feed');
+  const cards=Array.from(feed.querySelectorAll('.card'));
+  let current=0,isAnimating=false;
+  const progressBar=document.getElementById('progress').firstElementChild;
+  function setProgress(seconds){
+    progressBar.style.transition=`width ${seconds}s linear`;
+    progressBar.style.width='0%';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>progressBar.style.width='100%'));
+  }
+  function showIndex(i){
+    if(i<0||i>=cards.length||isAnimating||i===current) return;
+    isAnimating=true;
+    cards.forEach((c,idx)=>c.style.transform=`translateY(${(idx-i)*100}%)`);
+    setTimeout(()=>{current=i;isAnimating=false;playVisible();updateIndicators();},360);
+  }
+  function playVisible(){
+    cards.forEach((c,idx)=>{
+      const v=c.querySelector('video');
+      if(idx===current){ v.muted=v.muted; v.play().catch(()=>{}); setProgress(v.duration||15);}
+      else{ v.pause(); v.currentTime=0;}
+    });
+  }
+  function updateIndicators(){
+    cards.forEach((c,idx)=>{
+      const dots=c.querySelectorAll('.indicator span');
+      dots.forEach(d=>d.classList.remove('active'));
+      if(dots[current]) dots[current].classList.add('active');
+    });
+  }
+  let startY=0,endY=0;
+  feed.addEventListener('touchstart',e=>startY=e.changedTouches[0].clientY);
+  feed.addEventListener('touchend',e=>{endY=e.changedTouches[0].clientY; const diff=startY-endY;if(Math.abs(diff)>50) showIndex(current+(diff>0?1:-1));});
+  window.addEventListener('wheel',e=>{if(Math.abs(e.deltaY)<10) return; showIndex(current+(e.deltaY>0?1:-1));},{passive:true});
+  window.addEventListener('keydown',e=>{if(e.key==='ArrowDown') showIndex(current+1); if(e.key==='ArrowUp') showIndex(current-1);});
+  let lastTap=0;
+  cards.forEach((c,idx)=>{c.addEventListener('click',ev=>{
+    const now=Date.now();
+    if(now-lastTap<300){
+      const likeBtn=c.querySelector('[data-action="like"] span');
+      let val=likeBtn?likeBtn.textContent.replace(/[A-Za-z,\s]/g,''):'0';
+      let num=parseInt(val)||0; num+=1;
+      if(likeBtn) likeBtn.textContent=num;
+      const heart=document.createElement('div'); heart.textContent='❤';
+      heart.style.position='absolute';
+      heart.style.left=(ev.clientX-c.getBoundingClientRect().left)+'px';
+      heart.style.top=(ev.clientY-c.getBoundingClientRect().top-30)+'px';
+      heart.style.transform='translate(-50%,-50%) scale(0)';
+      heart.style.color='white'; heart.style.fontSize='48px'; heart.style.zIndex=50; heart.style.pointerEvents='none';
+      c.appendChild(heart);
+      requestAnimationFrame(()=>{ heart.style.transition='transform .45s ease-out, opacity .45s'; heart.style.transform='translate(-50%,-50%) scale(1)'; heart.style.opacity='1'; });
+      setTimeout(()=>{ heart.style.opacity='0'; heart.style.transform='translate(-50%,-80%) scale(.6)';},450);
+      setTimeout(()=>heart.remove(),900);
+    }
+    lastTap=now;
+  })});
+  const muteToggle=document.getElementById('muteToggle');
+  muteToggle.addEventListener('click',()=>{const v=cards[current].querySelector('video'); v.muted=!v.muted; muteToggle.textContent=v.muted?'🔈 Выкл звук':'🔊 Вкл звук';});
+  const io=new IntersectionObserver((entries)=>{entries.forEach(ent=>{const v=ent.target.querySelector('video');if(ent.isIntersecting){v.play().catch(()=>{});}else{v.pause();}});},{threshold:0.75});
+  cards.forEach(c=>io.observe(c));
+  cards.forEach((c,idx)=>c.style.transform=`translateY(${(idx-current)*100}%)`);
+  playVisible(); updateIndicators();
+  function preloadNext(){const next=cards[current+1];if(next){const v=next.querySelector('video');v.preload='auto';}}
+  setInterval(preloadNext,500);
+})();
+
+/* ---- Окно записи ---- */
+const openBtn=document.getElementById('openRecorder');
+const overlay=document.getElementById('recorderOverlay');
+const preview=document.getElementById('preview');
+const startBtn=document.getElementById('startRecord');
+const stopBtn=document.getElementById('stopRecord');
+const closeBtn=document.getElementById('closeRecorder');
+let mediaRecorder,recordedChunks=[],stream;
+
+openBtn.addEventListener('click', async ()=>{
+  overlay.style.display='flex';
+  stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  preview.srcObject=stream;
+});
+
+closeBtn.addEventListener('click', ()=>{
+  overlay.style.display='none';
+  if(stream) stream.getTracks().forEach(track=>track.stop());
+  startBtn.disabled=false;
+  stopBtn.disabled=true;
+});
+
+startBtn.addEventListener('click', ()=>{
+  recordedChunks=[];
+  mediaRecorder=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
+  mediaRecorder.ondataavailable=e=>{if(e.data.size>0) recordedChunks.push(e.data);};
+  mediaRecorder.onstop=()=>{
+    const blob=new Blob(recordedChunks,{type:'video/webm'});
+    const url=URL.createObjectURL(blob);
+    addNewVideo(url);
+    overlay.style.display='none';
+    stream.getTracks().forEach(track=>track.stop());
+  };
+  mediaRecorder.start();
+  startBtn.disabled=true;
+  stopBtn.disabled=false;
+});
+
+stopBtn.addEventListener('click', ()=>{mediaRecorder.stop(); startBtn.disabled=false; stopBtn.disabled=true;});
+
+/* ---- Профиль ---- */
+const profileBtn=document.getElementById('userProfileBtn');
+const userProfile=document.getElementById('userProfile');
+const closeProfile=document.getElementById('closeProfile');
+const profileVideos=document.getElementById('profileVideos');
+
+profileBtn.addEventListener('click',()=>{
+  userProfile.style.display='flex';
+  profileVideos.innerHTML='';
+  document.querySelectorAll('.card').forEach(card=>{
+    const username=card.querySelector('.profile strong').textContent;
+    if(username==='@current_user'){
+      const videoClone=card.querySelector('video').cloneNode(true);
+      videoClone.style.width='100%';
+      videoClone.style.height='auto';
+      profileVideos.appendChild(videoClone);
+    }
+  });
+});
+
+closeProfile.addEventListener('click',()=>{userProfile.style.display='none';});
+
+/* ---- Функция добавления нового видео ---- */
+function addNewVideo(url){
+  const feed=document.getElementById('feed');
+  const newCard=document.createElement('section');
+  const idx=document.querySelectorAll('.card').length;
+  newCard.className='card';
+  newCard.style.transform=`translateY(${idx*100}%)`;
+  newCard.innerHTML=`
+    <div class="video-wrap"><video class="media" src="${url}" playsinline muted preload="metadata" loop></video></div>
+    <div class="ui">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="profile">
+          <div class="avatar"></div>
+          <div style="display:flex;flex-direction:column">
+            <strong>@current_user</strong>
+            <span style="color:var(--muted);font-size:13px">Новое видео</span>
+          </div>
+        </div>
+        <div class="right-col">
+          <a class="btn" href="#" data-action="like"><div class="icon">♥</div><span>0</span></a>
+          <a class="btn" href="#" data-action="comment"><div class="icon">💬</div><span>0</span></a>
+          <a class="btn" href="#" data-action="share"><div class="icon">↗</div><span>Share</span></a>
+        </div>
+      </div>
+    </div>
+  `;
+  feed.appendChild(newCard);
+}
+</script>
+</body>
+</html>
